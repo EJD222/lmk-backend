@@ -10,6 +10,7 @@ class CreateSessionRequest(BaseModel):
     context: Optional[str] = None
     expected_count: int
     host_notes: Optional[str] = None
+    host_display_name: str
 
 
 class SessionOut(BaseModel):
@@ -24,6 +25,7 @@ class SessionOut(BaseModel):
 
 class CreateSessionResponse(BaseModel):
     session_id: str
+    host_participant_id: str
     join_link: str
 
 

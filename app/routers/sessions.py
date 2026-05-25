@@ -1,5 +1,7 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
+from sqlalchemy.orm import Session
 
+from app.db import get_db
 from app.schemas.base import APIResponse
 from app.schemas.session import (
     CreateSessionRequest,
@@ -11,14 +13,19 @@ from app.schemas.session import (
 from app.schemas.reveal import RevealResponse
 from app.schemas.category import CategoriesResponse
 from app.schemas.results import ResultsResponse
+from app.services.session_service import SessionService
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
 
 @router.post("/", response_model=APIResponse)
-async def create_session(body: CreateSessionRequest):
-    # TODO: call SessionService.create
-    raise HTTPException(status_code=501, detail="Not implemented")
+async def create_session(
+    body: CreateSessionRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    data = SessionService.create(db, body, background_tasks)
+    return APIResponse(success=True, data=data.model_dump())
 
 
 @router.get("/{session_id}", response_model=APIResponse)
