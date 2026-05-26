@@ -26,9 +26,10 @@ def upgrade() -> None:
     sa.Column('context', sa.Text(), nullable=True),
     sa.Column('state', sa.Enum('QUESTION_PHASE', 'WAITING', 'REVEAL', 'SWIPE_PHASE', 'RESULTS', name='sessionstate'), nullable=False),
     sa.Column('host_id', sa.UUID(), nullable=True),
+    sa.ForeignKeyConstraint(['host_id'], ['participants.id'], name='fk_sessions_host_id', use_alter=True),
     sa.Column('expected_count', sa.Integer(), nullable=False),
     sa.Column('deadline', sa.TIMESTAMP(), nullable=True),
-    sa.Column('answered_count', sa.Integer(), nullable=True),
+    sa.Column('answered_count', sa.Integer(), nullable=False, server_default='0'),
     sa.Column('created_at', sa.TIMESTAMP(), nullable=True),
     sa.PrimaryKeyConstraint('id')
     )
