@@ -151,3 +151,18 @@ class SessionService:
             categories_ready=categories_ready,
         )
 
+    @staticmethod
+    def advance_session_to_state(
+        db: DBSession,
+        session_id: str,
+        state: SessionState
+    ):
+        session = db.query(Session).filter(Session.id == _uuid.UUID(session_id)).first()
+        if not session:
+            raise HTTPException(
+                status_code=HTTPStatusCode.NOT_FOUND,
+                detail=HTTPErrorMessage.SESSION_NOT_FOUND,
+            )
+        
+        session.state = state
+        db.commit()
