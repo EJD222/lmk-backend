@@ -1,3 +1,4 @@
+import secrets
 import uuid as _uuid
 
 from sqlalchemy.orm import Session as DBSession
@@ -32,6 +33,7 @@ class SessionService:
         session = Session(
             topic=body.topic,
             context=body.context,
+            link_id=secrets.token_urlsafe(7),
         )
         db.add(session)
         db.flush()
