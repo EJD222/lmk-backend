@@ -1,5 +1,6 @@
 import re
 import uuid as _uuid
+import logging
 
 from openai import OpenAI, APITimeoutError, APIError
 from sqlalchemy.orm import Session as DBSession, joinedload
@@ -18,6 +19,12 @@ from app.services.question_service import QuestionService
 from app.services.category_service import CategoryService
 from app.services.answer_service import AnswerService
 
+logger = logging.getLogger(__name__)
+
+_openai_client = OpenAI(
+    api_key=OPENAI_API_KEY,
+    timeout=AI_TIMEOUT_SECONDS,
+)
 
 class AIService:
     @staticmethod
@@ -27,16 +34,12 @@ class AIService:
         context: str | None,
         host_notes: str | None,
     ) -> None:
-        client = OpenAI(
-            api_key=OPENAI_API_KEY,
-            timeout=AI_TIMEOUT_SECONDS,
-        )
         user_prompt = AIService._build_user_prompt(topic, context, host_notes)
         total_attempts = AI_MAX_RETRIES + 1
 
         for attempt in range(1, total_attempts + 1):
             try:
-                result_response = AIService._generate_questions_response(client, user_prompt)
+                result_response = AIService._generate_questions_response(_openai_client, user_prompt)
                 if result_response is None:
                     return
 
@@ -55,6 +58,7 @@ class AIService:
                 continue
 
             except (APIError, Exception):
+                logger.exception("Question generation failed for session %s on attempt %d", session_id, attempt)
                 return
 
     @staticmethod
@@ -117,10 +121,6 @@ class AIService:
 
     @staticmethod
     def generate_categories(session_id: str) -> None:
-        client = OpenAI(
-            api_key=OPENAI_API_KEY,
-            timeout=AI_TIMEOUT_SECONDS,
-        )
         total_attempts = AI_MAX_RETRIES + 1
 
         for attempt in range(1, total_attempts + 1):
@@ -129,12 +129,12 @@ class AIService:
                 if not answers_data:
                     return
 
-                answer_summary = AIService._generate_answer_summary(client, answers_data)
+                answer_summary = AIService._generate_answer_summary(_openai_client, answers_data)
                 if not answer_summary:
                     continue
 
                 category_response = AIService._generate_category_response(
-                    client, answer_summary, answers_data
+                    _openai_client, answer_summary, answers_data
                 )
 
                 if category_response is None or not category_response.valid:
@@ -152,6 +152,7 @@ class AIService:
                 continue
 
             except (APIError, Exception):
+                logger.exception("Category generation failed for session %s on attempt %d", session_id, attempt)
                 return
 
     # region Category Generation Helpers
