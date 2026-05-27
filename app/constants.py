@@ -2,9 +2,9 @@ from enum import Enum
 
 
 class SessionState(str, Enum):
-    QUESTION_PHASE = "QUESTION_PHASE"
-    WAITING = "WAITING"
-    REVEAL = "REVEAL"
+    ANSWERING  = "ANSWERING"
+    GENERATING = "GENERATING"
+    RESULTS    = "RESULTS"
 
 class Mechanic(str, Enum):
     MULTISELECT = "MULTISELECT"
@@ -13,8 +13,8 @@ class Mechanic(str, Enum):
 
 
 NEXT_STATE = {
-    SessionState.QUESTION_PHASE: SessionState.WAITING,
-    SessionState.WAITING: SessionState.REVEAL
+    SessionState.ANSWERING:  SessionState.GENERATING,
+    SessionState.GENERATING: SessionState.RESULTS
 }
 
 

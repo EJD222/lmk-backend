@@ -29,7 +29,7 @@ def seed_demo():
         id=uuid.uuid4(),
         topic="Saturday hangout",
         context="6 friends, mix of introverts and extroverts, some have cars",
-        state=SessionState.QUESTION_PHASE,
+        state=SessionState.ANSWERING,
         expected_count=6,
         answered_count=0,
     )
@@ -96,7 +96,7 @@ def seed_demo():
         db.add(Answer(participant_id=p.id, question_id=q5.id, value=text))
 
     session.answered_count = 6
-    session.state = SessionState.REVEAL
+    session.state = SessionState.RESULTS
 
     # --- Category options (pre-baked; no AI call needed during demo) ---
     categories = [
@@ -134,7 +134,7 @@ def seed_demo():
         cat_objects.append(c)
     db.flush()
 
-    session.state = SessionState.REVEAL
+    session.state = SessionState.RESULTS
     db.commit()
 
     print(f"✅ Demo session created: {session.id}")

@@ -136,7 +136,7 @@ class SessionService:
         session.state = next_state
         db.commit()
         
-        if next_state == SessionState.REVEAL:
+        if next_state == SessionState.GENERATING:
             background_tasks.add_task(AIService.generate_categories, str(session.id))
 
         categories_ready = (
