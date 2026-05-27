@@ -2,7 +2,7 @@ import uuid as _uuid
 
 from sqlalchemy.orm import Session as DBSession
 
-from app.models.category import CategoryOption
+from app.models.result import Result
 from app.schemas.ai import AICategory
 
 
@@ -14,7 +14,7 @@ class CategoryService:
             session_uuid = _uuid.UUID(session_id)
             for category in categories:
                 db.add(
-                    CategoryOption(
+                    Result(
                         session_id=session_uuid,
                         name=category.name,
                         reasoning=category.reasoning,

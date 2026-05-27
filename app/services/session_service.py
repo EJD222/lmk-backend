@@ -6,7 +6,7 @@ from fastapi import BackgroundTasks, HTTPException
 from app.db import SessionLocal
 from app.models.session import Session
 from app.models.participant import Participant
-from app.models.category import CategoryOption
+from app.models.result import Result
 from app.schemas.session import (
     CreateSessionRequest,
     CreateSessionResponse,
@@ -95,7 +95,7 @@ class SessionService:
             )
         
         categories_ready = (
-            db.query(CategoryOption).filter(CategoryOption.session_id == _uuid.UUID(session_id)).first()
+            db.query(Result).filter(Result.session_id == _uuid.UUID(session_id)).first()
             is not None
         )
 
@@ -140,7 +140,7 @@ class SessionService:
             background_tasks.add_task(AIService.generate_categories, str(session.id))
 
         categories_ready = (
-            db.query(CategoryOption).filter(CategoryOption.session_id == _uuid.UUID(session_id)).first()
+            db.query(Result).filter(Result.session_id == _uuid.UUID(session_id)).first()
             is not None
         )
         
