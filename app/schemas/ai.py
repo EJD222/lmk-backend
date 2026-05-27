@@ -1,23 +1,25 @@
+from pydantic import BaseModel
+
 from app.constants import Mechanic
 
 
-class AIQuestion:
+class AIQuestion(BaseModel):
     text: str
     mechanic: Mechanic
     options: list[str]
     display_order: int
 
 
-class AIQuestionsResponse:
+class AIQuestionsResponse(BaseModel):
     valid: bool
     questions: list[AIQuestion]
 
 
-class AIResult:
-    name: str
-    reasoning: str
+class AIResult(BaseModel):
+    type: str
+    value: str
 
 
-class AIResultsResponse:
+class AIResultsResponse(BaseModel):
     valid: bool
     results: list[AIResult]
