@@ -1,11 +1,8 @@
-from os import link
 import secrets
 import uuid as _uuid
 
 from sqlalchemy.orm import Session as DBSession
 from fastapi import BackgroundTasks, HTTPException
-
-from app.db import SessionLocal
 from app.models.session import Session
 from app.models.participant import Participant
 from app.models.result import Result

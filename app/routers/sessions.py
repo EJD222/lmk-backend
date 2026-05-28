@@ -1,19 +1,15 @@
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
+from fastapi import APIRouter, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.schemas.base import APIResponse
 from app.schemas.session import (
     CreateSessionRequest,
-    CreateSessionResponse,
-    SessionInfoResponse,
-    SessionStateResponse,
     AdvanceRequest,
 )
 from app.services.session_service import SessionService
 from app.services.ai_service import AIService
 from app.services.result_service import ResultService
-from app.utils.http import HTTPStatusCode, HTTPErrorMessage
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
