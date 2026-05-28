@@ -1,3 +1,4 @@
+from os import link
 import secrets
 import uuid as _uuid
 
@@ -11,7 +12,7 @@ from app.models.result import Result
 from app.schemas.session import (
     CreateSessionRequest,
     CreateSessionResponse,
-    SessionOut,
+    SessionInfoResponse,
     SessionStateResponse,
 )
 from app.constants import (
@@ -63,18 +64,18 @@ class SessionService:
         )
 
     @staticmethod
-    def get(
+    def get_by_link_id(
         db: DBSession,
-        session_id: str
-    ) -> SessionOut:
-        session = db.query(Session).filter(Session.id == _uuid.UUID(session_id)).first()
+        link_id: str
+    ) -> SessionInfoResponse:
+        session = db.query(Session).filter(Session.link_id == link_id).first()
         if not session:
             raise HTTPException(
                 status_code=HTTPStatusCode.NOT_FOUND,
                 detail=HTTPErrorMessage.SESSION_NOT_FOUND,
             )
         
-        return SessionOut(
+        return SessionInfoResponse(
             id=str(session.id),
             topic=session.topic,
             context=session.context,

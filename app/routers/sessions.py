@@ -6,7 +6,7 @@ from app.schemas.base import APIResponse
 from app.schemas.session import (
     CreateSessionRequest,
     CreateSessionResponse,
-    SessionOut,
+    SessionInfoResponse,
     SessionStateResponse,
     AdvanceRequest,
 )
@@ -28,12 +28,12 @@ async def create_session(
     return APIResponse(success=True, data=data.model_dump())
 
 
-@router.get("/{session_id}", response_model=APIResponse)
+@router.get("/link/{link_id}", response_model=APIResponse)
 async def get_session(
-    session_id: str,
+    link_id: str,
     db: Session = Depends(get_db)
 ):
-    data = SessionService.get(db, session_id)
+    data = SessionService.get_by_link_id(db, link_id)
     return APIResponse(success=True, data=data.model_dump())
 
 

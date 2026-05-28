@@ -12,7 +12,7 @@ class CreateSessionRequest(BaseModel):
     host_display_name: str
 
 
-class SessionOut(BaseModel):
+class SessionInfoResponse(BaseModel):
     id: str
     topic: str
     context: Optional[str] = None
