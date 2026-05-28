@@ -37,7 +37,12 @@ async def get_session(
     return APIResponse(success=True, data=data.model_dump())
 
 
-@router.get("/{session_id}/state", response_model=APIResponse)
+@router.get(
+    "/{session_id}/state",
+    response_model=APIResponse,
+    deprecated=True,
+    description="Deprecated: will be replaced by an SSE-based endpoint for real-time state updates.",
+)
 async def get_session_state(
     session_id: str,
     db: Session = Depends(get_db)
