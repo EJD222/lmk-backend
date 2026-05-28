@@ -73,6 +73,7 @@ class SessionService:
                 status_code=HTTPStatusCode.NOT_FOUND,
                 detail=HTTPErrorMessage.SESSION_NOT_FOUND,
             )
+        
         return SessionOut(
             id=str(session.id),
             topic=session.topic,
@@ -95,7 +96,7 @@ class SessionService:
             )
         
         results_ready = (
-            db.query(Result).filter(Result.session_id == _uuid.UUID(session_id)).first()
+            db.query(Result).filter(Result.session_id == session).first()
             is not None
         )
 
