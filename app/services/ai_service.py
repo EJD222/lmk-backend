@@ -330,6 +330,11 @@ class AIService:
                 last = q.options[-1].strip().lower().replace(" ", "")
                 if last != "other/any":
                     return False
+                
+            if q.mechanic == Mechanic.SWIPE:
+                if not q.options or len(q.options) != 2:
+                    return False
+                
 
         return True
 

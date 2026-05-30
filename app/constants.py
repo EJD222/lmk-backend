@@ -11,6 +11,8 @@ class Mechanic(str, Enum):
     MULTISELECT = "MULTISELECT"
     SLIDER = "SLIDER"
     TEXT = "TEXT"
+    SWIPE = "SWIPE"
+    
 
 
 class ResultType(str, Enum):
