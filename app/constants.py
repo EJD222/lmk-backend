@@ -11,6 +11,8 @@ class Mechanic(str, Enum):
     MULTISELECT = "MULTISELECT"
     SLIDER = "SLIDER"
     TEXT = "TEXT"
+    SWIPE = "SWIPE"
+    
 
 
 class ResultType(str, Enum):
@@ -26,3 +28,6 @@ NEXT_STATE = {
 MAX_HOST_NOTES_LENGTH = 500
 AI_TIMEOUT_SECONDS = 30
 AI_MAX_RETRIES = 2
+
+AI_MIN_QUESTIONS = 5
+AI_MAX_QUESTIONS = 10

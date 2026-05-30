@@ -21,7 +21,7 @@ class QuestionService:
                 db.add(question)
                 db.flush()
 
-                if q.mechanic.value == "MULTISELECT":
+                if len(q.options) > 0:
                     for label in q.options:
                         db.add(QuestionOption(question_id=question.id, label=label))
 

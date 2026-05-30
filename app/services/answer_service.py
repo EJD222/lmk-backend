@@ -29,6 +29,10 @@ def _validate_answer(mechanic, value) -> str:
         if not isinstance(value, dict) or "value" not in value:
             raise HTTPException(status_code=400, detail="SLIDER must be an object with a 'value' key.")
         return json.dumps(value)
+    if mechanic == Mechanic.SWIPE:
+        if not isinstance(value, str):
+            raise HTTPException(status_code=400, detail="SWIPE must be a string.")
+        return json.dumps(value)
 
 
 class AnswerService:
