@@ -52,7 +52,6 @@ class SessionService:
             str(session.id),
             body.topic,
             body.context,
-            body.host_notes,
         )
 
         return CreateSessionResponse(

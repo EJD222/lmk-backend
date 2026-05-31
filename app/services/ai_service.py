@@ -33,10 +33,9 @@ class AIService:
         session_id: str,
         topic: str,
         context: str | None,
-        host_notes: str | None,
     ) -> None:
         logger.info("Starting question generation for session %s", session_id)
-        user_prompt = AIService._build_user_prompt(topic, context, host_notes)
+        user_prompt = AIService._build_user_prompt(topic, context)
         total_attempts = AI_MAX_RETRIES + 1
 
         for attempt in range(1, total_attempts + 1):
@@ -305,13 +304,11 @@ class AIService:
 
     @staticmethod
     def _build_user_prompt(
-        topic: str, context: str | None, host_notes: str | None,
+        topic: str, context: str | None,
     ) -> str:
         parts = [f"Topic: {topic}"]
         if context:
             parts.append(f"Context: {context}")
-        if host_notes:
-            parts.append(f"Host notes: {host_notes}")
         return "\n".join(parts)
 
     @staticmethod

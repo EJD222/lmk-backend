@@ -1,14 +1,13 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 
-from app.constants import SessionState, MAX_HOST_NOTES_LENGTH
+from app.constants import SessionState
 
 
 class CreateSessionRequest(BaseModel):
     topic: str
     context: Optional[str] = None
-    host_notes: Optional[str] = Field(default=None, max_length=MAX_HOST_NOTES_LENGTH)
     host_display_name: str
 
 
