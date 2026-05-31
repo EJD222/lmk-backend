@@ -8,3 +8,4 @@ class JoinSessionRequest(BaseModel):
 
 class JoinSessionResponse(BaseModel):
     participant_id: str
+    session_id: str

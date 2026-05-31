@@ -33,7 +33,7 @@ class ParticipantService:
             .first()
         )
         if existing:
-            return JoinSessionResponse(participant_id=str(existing.id))
+            return JoinSessionResponse(participant_id=str(existing.id), session_id=str(session.id))
 
         participant = Participant(
             session_id=session.id,
@@ -43,4 +43,4 @@ class ParticipantService:
         db.add(participant)
         db.commit()
 
-        return JoinSessionResponse(participant_id=str(participant.id))
+        return JoinSessionResponse(participant_id=str(participant.id), session_id=str(session.id))
