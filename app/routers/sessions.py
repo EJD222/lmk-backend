@@ -20,12 +20,11 @@ router = APIRouter(prefix="/sessions", tags=["sessions"])
 
 
 @router.post("/", response_model=APIResponse)
-async def create_session(
+def create_session(
     body: CreateSessionRequest,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
-    data = SessionService.create(db, body, background_tasks)
+    data = SessionService.create(db, body)
     return APIResponse(success=True, data=data.model_dump())
 
 # IMPORTANT: declare this BEFORE /{session_id} and after link/{session_id} to avoid route conflicts 

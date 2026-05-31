@@ -33,7 +33,7 @@ class AIService:
         session_id: str,
         topic: str,
         context: str | None,
-    ) -> None:
+    ) -> bool:
         logger.info("Starting question generation for session %s", session_id)
         user_prompt = AIService._build_user_prompt(topic, context)
         total_attempts = AI_MAX_RETRIES + 1
@@ -44,11 +44,11 @@ class AIService:
                 result_response = AIService._generate_questions_response(_openai_client, user_prompt)
                 if result_response is None:
                     logger.warning("Session %s: received null response from OpenAI", session_id)
-                    return
+                    return False
 
                 if not result_response.valid:
                     logger.warning("Session %s: response marked as invalid by AI", session_id)
-                    return
+                    return False
 
                 if AIService._validate_response(result_response.questions):
                     logger.info("Session %s: validation passed with %d questions, saving", session_id, len(result_response.questions))
@@ -57,7 +57,7 @@ class AIService:
                         QuestionService.save_questions(db, session_id, result_response.questions)
                     finally:
                         db.close()
-                    return
+                    return True
                 else:
                     logger.warning("Session %s: validation failed for %d questions", session_id, len(result_response.questions))
 
@@ -67,8 +67,10 @@ class AIService:
 
             except (APIError, Exception):
                 logger.exception("Question generation failed for session %s on attempt %d", session_id, attempt)
-                return
+                return False
+
         logger.error("Session %s: question generation exhausted all %d attempts", session_id, total_attempts)
+        return False
 
     @staticmethod
     def get_questions(

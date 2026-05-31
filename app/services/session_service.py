@@ -2,7 +2,7 @@ import secrets
 import uuid as _uuid
 
 from sqlalchemy.orm import Session as DBSession
-from fastapi import BackgroundTasks, HTTPException
+from fastapi import HTTPException
 from app.models.session import Session
 from app.models.participant import Participant
 from app.models.result import Result
@@ -27,7 +27,6 @@ class SessionService:
     def create(
         db: DBSession,
         body: CreateSessionRequest,
-        background_tasks: BackgroundTasks,
     ) -> CreateSessionResponse:
         session = Session(
             topic=body.topic,
@@ -47,12 +46,19 @@ class SessionService:
         session.host_id = host.id
         db.commit()
 
-        background_tasks.add_task(
-            AIService.generate_questions,
+        success = AIService.generate_questions(
             str(session.id),
             body.topic,
             body.context,
         )
+
+        if not success:
+            db.delete(session)
+            db.commit()
+            raise HTTPException(
+                status_code=HTTPStatusCode.INTERNAL_SERVER_ERROR,
+                detail=HTTPErrorMessage.QUESTIONS_GENERATION_FAILED,
+            )
 
         return CreateSessionResponse(
             session_id=str(session.id),
