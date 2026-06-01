@@ -6,6 +6,8 @@ from fastapi import HTTPException
 
 from app.models.session import Session
 from app.models.participant import Participant
+from app.models.answer import Answer
+from app.models.question import Question
 from app.schemas.participant import JoinSessionRequest, JoinSessionResponse
 from app.utils.http import HTTPStatusCode, HTTPErrorMessage
 
@@ -44,3 +46,19 @@ class ParticipantService:
         db.commit()
 
         return JoinSessionResponse(participant_id=str(participant.id), session_id=str(session.id))
+
+    @staticmethod
+    def has_answered(
+        db: DBSession,
+        session_id: str,
+        participant_id: str,
+    ) -> bool:
+        return (
+            db.query(Answer)
+            .join(Answer.question)
+            .filter(
+                Question.session_id == _uuid.UUID(session_id),
+                Answer.participant_id == _uuid.UUID(participant_id),
+            )
+            .first()
+        ) is not None

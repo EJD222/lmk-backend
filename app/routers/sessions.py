@@ -15,6 +15,7 @@ from app.services.event_manager import event_manager
 from app.services.session_service import SessionService
 from app.services.ai_service import AIService
 from app.services.result_service import ResultService
+from app.services.participant_service import ParticipantService
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
@@ -97,6 +98,16 @@ async def get_questions(
 ):
     data = AIService.get_questions(db, session_id)
     return APIResponse(success=True, data=[q.model_dump() for q in data])
+
+
+@router.get("/{session_id}/participants/{participant_id}/answered", response_model=APIResponse)
+async def has_participant_answered(
+    session_id: str,
+    participant_id: str,
+    db: Session = Depends(get_db),
+):
+    answered = ParticipantService.has_answered(db, session_id, participant_id)
+    return APIResponse(success=True, data={"answered": answered})
 
 
 @router.get("/{session_id}/results", response_model=APIResponse)
