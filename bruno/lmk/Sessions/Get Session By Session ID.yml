@@ -1,5 +1,5 @@
 info:
-  name: Get Session
+  name: Get Session By Session ID
   type: http
   seq: 2
 

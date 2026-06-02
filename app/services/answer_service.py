@@ -14,6 +14,7 @@ from app.db import SessionLocal
 from app.models.session import Session
 from app.schemas.question import SubmitAnswersRequest
 from app.utils.http import HTTPErrorMessage, HTTPStatusCode
+from app.services.participant_service import ParticipantService
 
 
 def _validate_answer(mechanic, value) -> str:
@@ -28,6 +29,10 @@ def _validate_answer(mechanic, value) -> str:
     if mechanic == Mechanic.SLIDER:
         if not isinstance(value, dict) or "value" not in value:
             raise HTTPException(status_code=400, detail="SLIDER must be an object with a 'value' key.")
+        return json.dumps(value)
+    if mechanic == Mechanic.SWIPE:
+        if not isinstance(value, str):
+            raise HTTPException(status_code=400, detail="SWIPE must be a string.")
         return json.dumps(value)
 
 
@@ -78,6 +83,12 @@ class AnswerService:
             raise HTTPException(
                 status_code=HTTPStatusCode.NOT_FOUND,
                 detail=HTTPErrorMessage.SESSION_NOT_FOUND,
+            )
+
+        if ParticipantService.has_answered(db, session_id, body.participant_id):
+            raise HTTPException(
+                status_code=HTTPStatusCode.CONFLICT,
+                detail=HTTPErrorMessage.PARTICIPANT_ALREADY_ANSWERED,
             )
 
         questions = {

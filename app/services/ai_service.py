@@ -12,7 +12,8 @@ from app.models.session import Session
 from app.models.question import Question
 from app.schemas.ai import AIQuestion, AIQuestionsResponse, AIResultsResponse
 from app.schemas.question import QuestionOut, QuestionOptionOut
-from app.constants import Mechanic, AI_TIMEOUT_SECONDS, AI_MAX_RETRIES, SessionState
+from app.constants import AI_MAX_QUESTIONS, AI_MIN_QUESTIONS, Mechanic, AI_TIMEOUT_SECONDS, AI_MAX_RETRIES, SessionState
+from app.services.event_manager import event_manager
 from app.utils.prompts import ANSWER_SUMMARY_GENERATION_SYSTEM_PROMPT, RESULT_GENERATION_SYSTEM_PROMPT, QUESTION_GENERATION_SYSTEM_PROMPT
 from app.utils.http import HTTPStatusCode, HTTPErrorMessage
 from app.services.question_service import QuestionService
@@ -32,10 +33,9 @@ class AIService:
         session_id: str,
         topic: str,
         context: str | None,
-        host_notes: str | None,
-    ) -> None:
+    ) -> bool:
         logger.info("Starting question generation for session %s", session_id)
-        user_prompt = AIService._build_user_prompt(topic, context, host_notes)
+        user_prompt = AIService._build_user_prompt(topic, context)
         total_attempts = AI_MAX_RETRIES + 1
 
         for attempt in range(1, total_attempts + 1):
@@ -44,11 +44,11 @@ class AIService:
                 result_response = AIService._generate_questions_response(_openai_client, user_prompt)
                 if result_response is None:
                     logger.warning("Session %s: received null response from OpenAI", session_id)
-                    return
+                    return False
 
                 if not result_response.valid:
                     logger.warning("Session %s: response marked as invalid by AI", session_id)
-                    return
+                    return False
 
                 if AIService._validate_response(result_response.questions):
                     logger.info("Session %s: validation passed with %d questions, saving", session_id, len(result_response.questions))
@@ -57,7 +57,7 @@ class AIService:
                         QuestionService.save_questions(db, session_id, result_response.questions)
                     finally:
                         db.close()
-                    return
+                    return True
                 else:
                     logger.warning("Session %s: validation failed for %d questions", session_id, len(result_response.questions))
 
@@ -67,8 +67,10 @@ class AIService:
 
             except (APIError, Exception):
                 logger.exception("Question generation failed for session %s on attempt %d", session_id, attempt)
-                return
+                return False
+
         logger.error("Session %s: question generation exhausted all %d attempts", session_id, total_attempts)
+        return False
 
     @staticmethod
     def get_questions(
@@ -165,6 +167,8 @@ class AIService:
                         if session:
                             session.state = SessionState.RESULTS
                             db.commit()
+
+                            event_manager.publish(session_id, SessionState.RESULTS.value)
                     finally:
                         db.close()
                     return
@@ -290,7 +294,7 @@ class AIService:
             )
 
         prompt_parts.append(
-            "\n\nBased on this group's preferences and constraints, generate 4–6 result recommendations. "
+            f"\n\nBased on this group's preferences and constraints, generate {AI_MIN_QUESTIONS}–{AI_MAX_QUESTIONS} result recommendations. "
             "Each recommendation should explicitly reference the group data that supports it."
         )
 
@@ -302,23 +306,17 @@ class AIService:
 
     @staticmethod
     def _build_user_prompt(
-        topic: str, context: str | None, host_notes: str | None,
+        topic: str, context: str | None,
     ) -> str:
         parts = [f"Topic: {topic}"]
         if context:
             parts.append(f"Context: {context}")
-        if host_notes:
-            parts.append(f"Host notes: {host_notes}")
         return "\n".join(parts)
 
     @staticmethod
     def _validate_response(questions: list[AIQuestion]) -> bool:
-        if not (4 <= len(questions) <= 6):
+        if not (AI_MIN_QUESTIONS <= len(questions) <= AI_MAX_QUESTIONS):
             return False
-
-        for i in range(1, len(questions)):
-            if questions[i].mechanic == questions[i - 1].mechanic:
-                return False
 
         for q in questions:
             if q.mechanic == Mechanic.MULTISELECT:
@@ -327,6 +325,11 @@ class AIService:
                 last = q.options[-1].strip().lower().replace(" ", "")
                 if last != "other/any":
                     return False
+                
+            if q.mechanic == Mechanic.SWIPE:
+                if not q.options or len(q.options) != 2:
+                    return False
+                
 
         return True
 

@@ -1,43 +1,77 @@
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
+import json
+import asyncio
+
+from fastapi import APIRouter, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
+from sse_starlette.sse import EventSourceResponse
 
 from app.db import get_db
 from app.schemas.base import APIResponse
 from app.schemas.session import (
     CreateSessionRequest,
-    CreateSessionResponse,
-    SessionOut,
-    SessionStateResponse,
     AdvanceRequest,
 )
+from app.services.event_manager import event_manager
 from app.services.session_service import SessionService
 from app.services.ai_service import AIService
 from app.services.result_service import ResultService
-from app.utils.http import HTTPStatusCode, HTTPErrorMessage
+from app.services.participant_service import ParticipantService
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
 
 @router.post("/", response_model=APIResponse)
-async def create_session(
+def create_session(
     body: CreateSessionRequest,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
-    data = SessionService.create(db, body, background_tasks)
+    data = SessionService.create(db, body)
     return APIResponse(success=True, data=data.model_dump())
 
+# IMPORTANT: declare this BEFORE /{session_id} and after link/{session_id} to avoid route conflicts 
+@router.get("/{session_id}/stream")
+async def stream_session(
+    session_id: str,
+    db: Session = Depends(get_db),
+):
+    data = SessionService.get_by_session_id(db, session_id)
+
+    queue = event_manager.subscribe(session_id)
+
+    async def generator():
+        try:
+            yield {
+                "event": "state_change",
+                "data": json.dumps({"state": data.state.value}),
+            }
+
+            while True:
+                state = await queue.get()
+                yield {
+                    "event": "state_change",
+                    "data": json.dumps({"state": state}),
+                }
+        except asyncio.CancelledError:
+            event_manager.unsubscribe(session_id, queue)
+            raise
+
+    return EventSourceResponse(generator())
 
 @router.get("/{session_id}", response_model=APIResponse)
 async def get_session(
     session_id: str,
     db: Session = Depends(get_db)
 ):
-    data = SessionService.get(db, session_id)
+    data = SessionService.get_by_session_id(db, session_id)
     return APIResponse(success=True, data=data.model_dump())
 
 
-@router.get("/{session_id}/state", response_model=APIResponse)
+@router.get(
+    "/{session_id}/state",
+    response_model=APIResponse,
+    deprecated=True,
+    description="Deprecated: will be replaced by an SSE-based endpoint for real-time state updates.",
+)
 async def get_session_state(
     session_id: str,
     db: Session = Depends(get_db)
@@ -64,6 +98,16 @@ async def get_questions(
 ):
     data = AIService.get_questions(db, session_id)
     return APIResponse(success=True, data=[q.model_dump() for q in data])
+
+
+@router.get("/{session_id}/participants/{participant_id}/answered", response_model=APIResponse)
+async def has_participant_answered(
+    session_id: str,
+    participant_id: str,
+    db: Session = Depends(get_db),
+):
+    answered = ParticipantService.has_answered(db, session_id, participant_id)
+    return APIResponse(success=True, data={"answered": answered})
 
 
 @router.get("/{session_id}/results", response_model=APIResponse)

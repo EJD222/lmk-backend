@@ -6,25 +6,27 @@ from fastapi import HTTPException
 
 from app.models.session import Session
 from app.models.participant import Participant
+from app.models.answer import Answer
+from app.models.question import Question
 from app.schemas.participant import JoinSessionRequest, JoinSessionResponse
 from app.utils.http import HTTPStatusCode, HTTPErrorMessage
 
 
 class ParticipantService:
     @staticmethod
-    def join(
+    def join_by_link_id(
         db: DBSession,
-        session_id: str,
+        link_id: str,
         body: JoinSessionRequest,
     ) -> JoinSessionResponse:
-        session = db.query(Session).filter(Session.id == _uuid.UUID(session_id)).first()
+        session = db.query(Session).filter(Session.link_id == link_id).first()
         if not session:
             raise HTTPException(
                 status_code=HTTPStatusCode.NOT_FOUND,
                 detail=HTTPErrorMessage.SESSION_NOT_FOUND,
             )
 
-        duplicate = (
+        existing = (
             db.query(Participant)
             .filter(
                 Participant.session_id == session.id,
@@ -32,11 +34,8 @@ class ParticipantService:
             )
             .first()
         )
-        if duplicate:
-            raise HTTPException(
-                status_code=HTTPStatusCode.CONFLICT,
-                detail=HTTPErrorMessage.DISPLAY_NAME_TAKEN,
-            )
+        if existing:
+            return JoinSessionResponse(participant_id=str(existing.id), session_id=str(session.id))
 
         participant = Participant(
             session_id=session.id,
@@ -46,4 +45,20 @@ class ParticipantService:
         db.add(participant)
         db.commit()
 
-        return JoinSessionResponse(participant_id=str(participant.id))
+        return JoinSessionResponse(participant_id=str(participant.id), session_id=str(session.id))
+
+    @staticmethod
+    def has_answered(
+        db: DBSession,
+        session_id: str,
+        participant_id: str,
+    ) -> bool:
+        return (
+            db.query(Answer)
+            .join(Answer.question)
+            .filter(
+                Question.session_id == _uuid.UUID(session_id),
+                Answer.participant_id == _uuid.UUID(participant_id),
+            )
+            .first()
+        ) is not None

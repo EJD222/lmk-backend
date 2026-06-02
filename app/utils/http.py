@@ -8,6 +8,7 @@ class HTTPStatusCode(int, Enum):
     FORBIDDEN = 403
     NOT_FOUND = 404
     CONFLICT = 409
+    INTERNAL_SERVER_ERROR = 500
     NOT_IMPLEMENTED = 501
 
 
@@ -20,3 +21,4 @@ class HTTPErrorMessage(str, Enum):
     NOT_IMPLEMENTED = "Not implemented"
     QUESTIONS_NOT_READY = "Questions are still being generated. Please try again shortly."
     QUESTIONS_GENERATION_FAILED = "Question generation failed. Please create a new session."
+    PARTICIPANT_ALREADY_ANSWERED = "Participant has already submitted answers for this session."

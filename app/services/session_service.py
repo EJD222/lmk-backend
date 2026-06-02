@@ -3,21 +3,20 @@ import uuid as _uuid
 
 from sqlalchemy.orm import Session as DBSession
 from fastapi import BackgroundTasks, HTTPException
-
-from app.db import SessionLocal
 from app.models.session import Session
 from app.models.participant import Participant
 from app.models.result import Result
 from app.schemas.session import (
     CreateSessionRequest,
     CreateSessionResponse,
-    SessionOut,
+    SessionInfoResponse,
     SessionStateResponse,
 )
 from app.constants import (
     NEXT_STATE,
     SessionState,
 )
+from app.services.event_manager import event_manager
 from app.utils.urls import FRONTEND_URL, URLPath
 from app.utils.http import HTTPStatusCode, HTTPErrorMessage
 from app.services.ai_service import AIService
@@ -28,7 +27,6 @@ class SessionService:
     def create(
         db: DBSession,
         body: CreateSessionRequest,
-        background_tasks: BackgroundTasks,
     ) -> CreateSessionResponse:
         session = Session(
             topic=body.topic,
@@ -48,13 +46,19 @@ class SessionService:
         session.host_id = host.id
         db.commit()
 
-        background_tasks.add_task(
-            AIService.generate_questions,
+        success = AIService.generate_questions(
             str(session.id),
             body.topic,
             body.context,
-            body.host_notes,
         )
+
+        if not success:
+            db.delete(session)
+            db.commit()
+            raise HTTPException(
+                status_code=HTTPStatusCode.INTERNAL_SERVER_ERROR,
+                detail=HTTPErrorMessage.QUESTIONS_GENERATION_FAILED,
+            )
 
         return CreateSessionResponse(
             session_id=str(session.id),
@@ -63,24 +67,31 @@ class SessionService:
         )
 
     @staticmethod
-    def get(
+    def get_by_session_id(
         db: DBSession,
         session_id: str
-    ) -> SessionOut:
+    ) -> SessionInfoResponse:
         session = db.query(Session).filter(Session.id == _uuid.UUID(session_id)).first()
+        return SessionService._get_session_helper(session)
+    
+    @staticmethod
+    def _get_session_helper(
+        session: Session
+    ) -> SessionInfoResponse:
         if not session:
             raise HTTPException(
                 status_code=HTTPStatusCode.NOT_FOUND,
                 detail=HTTPErrorMessage.SESSION_NOT_FOUND,
             )
         
-        return SessionOut(
+        return SessionInfoResponse(
             id=str(session.id),
             topic=session.topic,
             context=session.context,
             state=session.state,
             join_link=f"{FRONTEND_URL}{URLPath.JOIN_SESSION}/{session.link_id}",
             created_at=session.created_at,
+            host_id=str(session.host_id),
         )
 
     @staticmethod
@@ -134,6 +145,8 @@ class SessionService:
 
         session.state = next_state
         db.commit()
+
+        event_manager.publish(session_id, next_state.value)
         
         if next_state == SessionState.GENERATING:
             background_tasks.add_task(AIService.generate_results, str(session.id))
@@ -147,19 +160,3 @@ class SessionService:
             state=session.state,
             results_ready=results_ready,
         )
-
-    @staticmethod
-    def advance_session_to_state(
-        db: DBSession,
-        session_id: str,
-        state: SessionState
-    ):
-        session = db.query(Session).filter(Session.id == _uuid.UUID(session_id)).first()
-        if not session:
-            raise HTTPException(
-                status_code=HTTPStatusCode.NOT_FOUND,
-                detail=HTTPErrorMessage.SESSION_NOT_FOUND,
-            )
-        
-        session.state = state
-        db.commit()
