@@ -13,7 +13,8 @@ from app.models.session import Session
 from app.models.question import Question
 from app.schemas.ai import AIQuestion, AIQuestionsResponse, AIResultsResponse
 from app.schemas.question import QuestionOut, QuestionOptionOut
-from app.constants import AI_MAX_QUESTIONS, AI_MIN_QUESTIONS, Mechanic, AI_TIMEOUT_SECONDS, AI_MAX_RETRIES, SessionState
+from app.constants import AI_MAX_QUESTIONS, AI_MIN_QUESTIONS, Mechanic, AI_TIMEOUT_SECONDS, AI_MAX_RETRIES, SessionState, MAX_NAME_LEN, MAX_ANSWER_TEXT_LEN, MAX_TOPIC_LEN, MAX_CONTEXT_LEN
+from app.utils.sanitize import sanitize
 from app.services.event_manager import event_manager
 from app.utils.prompts import ANSWER_SUMMARY_GENERATION_SYSTEM_PROMPT, RESULT_GENERATION_SYSTEM_PROMPT, QUESTION_GENERATION_SYSTEM_PROMPT
 from app.utils.http import HTTPStatusCode, HTTPErrorMessage
@@ -295,7 +296,6 @@ class AIService:
         answers = answers_data["answers"]
         participant_count = answers_data["participant_count"]
 
-        # Group answers by question for better summarization
         answers_by_question = {}
         for answer in answers:
             q_text = answer["question_text"]
@@ -311,9 +311,9 @@ class AIService:
         for q_text, q_answers in answers_by_question.items():
             prompt_parts.append(f"\nQ: {q_text}")
             for answer in q_answers:
-                prompt_parts.append(
-                    f"  - {answer['participant_name']}: {answer['value']}"
-                )
+                name = sanitize(str(answer['participant_name']), MAX_NAME_LEN)
+                value = sanitize(str(answer['value']), MAX_ANSWER_TEXT_LEN)
+                prompt_parts.append(f"  - [NAME]: {name} | [ANSWER]: {value}")
 
         prompt_parts.append(
             "\n\nProvide a structured summary that highlights the group's collective preferences, "
@@ -330,11 +330,11 @@ class AIService:
             "\n\nDETAILED ANSWER DATA:\n",
         ]
 
-        # Include structured answer data for precise reasoning
         for answer in answers_data["answers"]:
-            prompt_parts.append(
-                f"- {answer['participant_name']} [{answer['question_mechanic']}]: {answer['value']}"
-            )
+            name = sanitize(str(answer['participant_name']), MAX_NAME_LEN)
+            mechanic = answer['question_mechanic']
+            value = sanitize(str(answer['value']), MAX_ANSWER_TEXT_LEN)
+            prompt_parts.append(f"- [NAME]: {name} | [TYPE]: {mechanic} | [ANSWER]: {value}")
 
         prompt_parts.append(
             f"\n\nBased on this group's preferences and constraints, generate {AI_MIN_QUESTIONS}–{AI_MAX_QUESTIONS} result recommendations. "
@@ -351,9 +351,9 @@ class AIService:
     def _build_user_prompt(
         topic: str, context: str | None,
     ) -> str:
-        parts = [f"Topic: {topic}"]
+        parts = [f"[TOPIC]: {sanitize(topic, MAX_TOPIC_LEN)}"]
         if context:
-            parts.append(f"Context: {context}")
+            parts.append(f"[CONTEXT]: {sanitize(context, MAX_CONTEXT_LEN)}")
         return "\n".join(parts)
 
     @staticmethod
