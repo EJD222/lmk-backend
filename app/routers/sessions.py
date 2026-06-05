@@ -1,11 +1,12 @@
 import json
 import asyncio
 
-from fastapi import APIRouter, Depends, BackgroundTasks
+from fastapi import APIRouter, Depends, BackgroundTasks, Request
 from sqlalchemy.orm import Session
 from sse_starlette.sse import EventSourceResponse
 
 from app.db import get_db
+from app.middleware.rate_limit import limiter
 from app.schemas.base import APIResponse
 from app.schemas.session import (
     CreateSessionRequest,
@@ -22,7 +23,9 @@ router = APIRouter(prefix="/sessions", tags=["sessions"])
 
 
 @router.post("/", response_model=APIResponse)
+@limiter.limit("5/minute")
 def create_session(
+    request: Request,
     body: CreateSessionRequest,
     db: Session = Depends(get_db),
 ):
@@ -92,7 +95,9 @@ async def get_session_state(
 
 
 @router.post("/{session_id}/advance", response_model=APIResponse)
+@limiter.limit("10/minute")
 async def advance_session(
+    request: Request,
     session_id: str,
     body: AdvanceRequest,
     background_tasks: BackgroundTasks,
