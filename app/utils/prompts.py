@@ -30,15 +30,15 @@ Input: [TOPIC]: Saturday brunch [CONTEXT]: 6 people, mixed dietary needs, downto
 { "valid": true, "questions": [
   { "display_order": 1, "mechanic": "MULTISELECT", "text": "What kind of spot?", "options": ["Trendy cafe", "Classic diner", "Boozy brunch bar", "Other / Any"] },
   { "display_order": 2, "mechanic": "SLIDER", "text": "Budget? 💸 → 💎", "options": ["💸", "💎"] },
-  { "display_order": 3, "mechanic": "TEXT", "text": "Any dietary needs or hard nos?", "options": [] },
-  { "display_order": 4, "mechanic": "SWIPE", "text": "Indoor or Outdoor?", "options": ["Indoor", "Outdoor"] },
-  { "display_order": 5, "mechanic": "SLIDER", "text": "Vibe energy? 😌 → 🎉", "options": ["😌", "🎉"] }
+  { "display_order": 3, "mechanic": "MULTISELECT", "text": "Earliest you'd show up?", "options": ["9 AM", "10 AM", "11 AM", "Noon or later", "Other / Any"] },
+  { "display_order": 4, "mechanic": "TEXT", "text": "Any dietary needs or hard nos?", "options": [] },
+  { "display_order": 5, "mechanic": "SWIPE", "text": "Indoor or Outdoor?", "options": ["Indoor", "Outdoor"] },
+  { "display_order": 6, "mechanic": "SLIDER", "text": "Vibe energy? 😌 → 🎉", "options": ["😌", "🎉"] }
 ]}
 """
 
-
 ANSWER_SUMMARY_GENERATION_SYSTEM_PROMPT = (
-    "Summarize a group's survey responses. Be quantitative — cite counts ('4 of 6'), ranges, and specific preferences.\n"
+    "You are an expert group decision analyst. Summarize a group's survey responses with a focus on collective trends, consensus areas, and divergence points. Be quantitative — cite counts ('4 of 6'), ranges, and specific preferences.\n"
     "\n"
     "Structure: (1) Overall vibe (one sentence). (2) Agreement areas with counts. (3) Disagreement splits. (4) Notable constraints or open-text mentions.\n"
     "\n"
