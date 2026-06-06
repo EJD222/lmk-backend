@@ -1,12 +1,14 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional, Any
 
-from app.constants import Mechanic
+from app.constants import Mechanic, MAX_ANSWER_TEXT_LEN
+from app.utils.sanitize import sanitize
 
 
 class QuestionOptionOut(BaseModel):
     id: str
     label: str
+    display_order: int
 
 
 class QuestionOut(BaseModel):
@@ -20,6 +22,13 @@ class QuestionOut(BaseModel):
 class AnswerSubmission(BaseModel):
     question_id: str
     value: Any
+
+    @field_validator("value")
+    @classmethod
+    def validate_value(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return sanitize(v, MAX_ANSWER_TEXT_LEN)
+        return v
 
 
 class SubmitAnswersRequest(BaseModel):

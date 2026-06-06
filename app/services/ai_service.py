@@ -13,7 +13,8 @@ from app.models.session import Session
 from app.models.question import Question
 from app.schemas.ai import AIQuestion, AIQuestionsResponse, AIResultsResponse
 from app.schemas.question import QuestionOut, QuestionOptionOut
-from app.constants import AI_MAX_QUESTIONS, AI_MIN_QUESTIONS, Mechanic, AI_TIMEOUT_SECONDS, AI_MAX_RETRIES, SessionState
+from app.constants import AI_MAX_QUESTIONS, AI_MIN_QUESTIONS, Mechanic, AI_TIMEOUT_SECONDS, AI_MAX_RETRIES, SessionState, ResultType, MAX_NAME_LEN, MAX_ANSWER_TEXT_LEN, MAX_TOPIC_LEN, MAX_CONTEXT_LEN
+from app.utils.sanitize import sanitize
 from app.services.event_manager import event_manager
 from app.utils.prompts import ANSWER_SUMMARY_GENERATION_SYSTEM_PROMPT, RESULT_GENERATION_SYSTEM_PROMPT, QUESTION_GENERATION_SYSTEM_PROMPT
 from app.utils.http import HTTPStatusCode, HTTPErrorMessage
@@ -126,7 +127,7 @@ class AIService:
                 mechanic=q.mechanic,
                 display_order=q.display_order,
                 options=[
-                    QuestionOptionOut(id=str(o.id), label=o.label)
+                    QuestionOptionOut(id=str(o.id), label=o.label, display_order=o.display_order)
                     for o in q.options
                 ],
             )
@@ -153,79 +154,91 @@ class AIService:
     def generate_results(session_id: str) -> None:
         logger.info("Starting result generation for session %s", session_id)
         total_attempts = AI_MAX_RETRIES + 1
+        succeeded = False
 
-        for attempt in range(1, total_attempts + 1):
-            try:
-                logger.info("Session %s: result generation attempt %d/%d", session_id, attempt, total_attempts)
-                answers_data = AnswerService.fetch_session_answers(session_id)
-                if not answers_data:
-                    logger.warning("Session %s: no answers found, aborting result generation", session_id)
-                    return
+        try:
+            for attempt in range(1, total_attempts + 1):
+                try:
+                    logger.info("Session %s: result generation attempt %d/%d", session_id, attempt, total_attempts)
+                    answers_data = AnswerService.fetch_session_answers(session_id)
+                    if not answers_data:
+                        logger.warning("Session %s: no answers found, aborting result generation", session_id)
+                        return
 
-                logger.info("Session %s: generating answer summary", session_id)
-                answer_summary = AIService._generate_answer_summary(_openai_client, answers_data)
-                if not answer_summary:
-                    logger.warning("Session %s: answer summary generation failed, retrying", session_id)
-                    continue
+                    logger.info("Session %s: generating answer summary", session_id)
+                    answer_summary = AIService._generate_answer_summary(_openai_client, answers_data)
+                    if not answer_summary:
+                        logger.warning("Session %s: answer summary generation failed, retrying", session_id)
+                        continue
 
-                logger.info("Session %s: generating result response", session_id)
-                results_response = AIService._generate_result_response(
-                    _openai_client, answer_summary, answers_data
-                )
-
-                if results_response is None or not results_response.valid:
-                    logger.warning("Session %s: result response null or invalid, retrying", session_id)
-                    continue
-
-                if AIService._validate_results(results_response.results):
-                    logger.info("Session %s: validation passed with %d results, saving", session_id, len(results_response.results))
-                    db = SessionLocal()
-                    try:
-                        ResultService.save_results(db, session_id, results_response.results)
-                        session = db.query(Session).filter(Session.id == _uuid.UUID(session_id)).first()
-                        if session:
-                            session.state = SessionState.RESULTS
-                            db.commit()
-
-                            event_manager.publish(session_id, SessionState.RESULTS.value)
-                    finally:
-                        db.close()
-
-                    pendo_track(
-                        "results_generated",
-                        visitor_id="system",
-                        account_id=session_id,
-                        properties={
-                            "session_id": session_id,
-                            "result_count": len(results_response.results),
-                            "participant_count": answers_data.get("participant_count", 0),
-                            "attempt_number": attempt,
-                            "answer_count": len(answers_data.get("answers", [])),
-                        },
+                    logger.info("Session %s: generating result response", session_id)
+                    results_response = AIService._generate_result_response(
+                        _openai_client, answer_summary, answers_data
                     )
+
+                    if results_response is None or not results_response.valid:
+                        logger.warning("Session %s: result response null or invalid, retrying", session_id)
+                        continue
+
+                    if AIService._validate_results(results_response.results):
+                        logger.info(
+                            "Session %s: validation passed with %d results (%d recommendations), saving",
+                            session_id,
+                            len(results_response.results),
+                            len([r for r in results_response.results if r.type == ResultType.RECOMMENDATION.value]),
+                        )
+                        db = SessionLocal()
+                        try:
+                            ResultService.save_results(db, session_id, results_response.results)
+                            session = db.query(Session).filter(Session.id == _uuid.UUID(session_id)).first()
+                            if session:
+                                session.state = SessionState.RESULTS
+                                db.commit()
+                                succeeded = True
+                                event_manager.publish(session_id, SessionState.RESULTS.value)
+                        finally:
+                            db.close()
+
+                        pendo_track(
+                            "results_generated",
+                            visitor_id="system",
+                            account_id=session_id,
+                            properties={
+                                "session_id": session_id,
+                                "result_count": len(results_response.results),
+                                "participant_count": answers_data.get("participant_count", 0),
+                                "attempt_number": attempt,
+                                "answer_count": len(answers_data.get("answers", [])),
+                            },
+                        )
+                        return
+                    else:
+                        logger.warning("Session %s: validation failed for %d results", session_id, len(results_response.results))
+
+                except APITimeoutError:
+                    logger.warning("Session %s: OpenAI timeout on attempt %d", session_id, attempt)
+                    continue
+
+                except (APIError, Exception):
+                    logger.exception("Result generation failed for session %s on attempt %d", session_id, attempt)
                     return
-                else:
-                    logger.warning("Session %s: validation failed for %d results", session_id, len(results_response.results))
 
-            except APITimeoutError:
-                logger.warning("Session %s: OpenAI timeout on attempt %d", session_id, attempt)
-                continue
+            logger.error("Session %s: result generation exhausted all %d attempts", session_id, total_attempts)
+            pendo_track(
+                "result_generation_failed",
+                visitor_id="system",
+                account_id=session_id,
+                properties={
+                    "session_id": session_id,
+                    "failure_reason": "exhausted_retries",
+                    "attempts_made": total_attempts,
+                    "had_answers": True,
+                },
+            )
 
-            except (APIError, Exception):
-                logger.exception("Result generation failed for session %s on attempt %d", session_id, attempt)
-                return
-        logger.error("Session %s: result generation exhausted all %d attempts", session_id, total_attempts)
-        pendo_track(
-            "result_generation_failed",
-            visitor_id="system",
-            account_id=session_id,
-            properties={
-                "session_id": session_id,
-                "failure_reason": "exhausted_retries",
-                "attempts_made": total_attempts,
-                "had_answers": True,
-            },
-        )
+        finally:
+            if not succeeded:
+                AIService._set_session_state(session_id, SessionState.ANSWERING)
 
     # region Result Generation Helpers
 
@@ -281,9 +294,13 @@ class AIService:
 
     @staticmethod
     def _validate_results(results: list) -> bool:
-        if not (4 <= len(results) <= 6):
+        overall = [r for r in results if r.type == ResultType.OVERALL.value]
+        recommendations = [r for r in results if r.type == ResultType.RECOMMENDATION.value]
+        if len(overall) != 1:
             return False
-        for result in results:
+        if not (4 <= len(recommendations) <= 6):
+            return False
+        for result in recommendations:
             if not result.type or not result.value:
                 return False
             if not re.search(r'\d', result.value):
@@ -291,29 +308,113 @@ class AIService:
         return True
 
     @staticmethod
+    def _compute_question_stats(answers_by_question: dict) -> str:
+        lines: list[str] = []
+
+        for (q_text, mechanic), values in answers_by_question.items():
+            if mechanic == Mechanic.TEXT.value:
+                continue
+
+            stat_lines: list[str] = []
+
+            if mechanic == Mechanic.NUMBER.value:
+                nums = []
+                for v in values:
+                    try:
+                        nums.append(int(v))
+                    except (ValueError, TypeError):
+                        pass
+                if nums:
+                    avg = sum(nums) / len(nums)
+                    stat_lines.append(f"  n={len(nums)}, avg={avg:.1f}, min={min(nums)}, max={max(nums)}")
+
+            elif mechanic == Mechanic.SLIDER.value:
+                slider_vals = []
+                for v in values:
+                    try:
+                        parsed = json.loads(v)
+                        if isinstance(parsed, dict) and "value" in parsed:
+                            slider_vals.append(float(parsed["value"]))
+                    except (json.JSONDecodeError, TypeError, KeyError):
+                        pass
+                if slider_vals:
+                    avg = sum(slider_vals) / len(slider_vals)
+                    stat_lines.append(f"  n={len(slider_vals)}, avg={avg:.1f}, min={min(slider_vals)}, max={max(slider_vals)}")
+
+            elif mechanic == Mechanic.MULTISELECT.value:
+                option_counts: dict[str, int] = {}
+                respondent_count = 0
+                for v in values:
+                    try:
+                        options = json.loads(v)
+                        if isinstance(options, list):
+                            respondent_count += 1
+                            for opt in options:
+                                opt_str = str(opt)
+                                option_counts[opt_str] = option_counts.get(opt_str, 0) + 1
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                if option_counts:
+                    stat_lines.append(f"  {respondent_count} respondents:")
+                    for opt, count in sorted(option_counts.items(), key=lambda x: -x[1]):
+                        stat_lines.append(f"    {opt}: {count}/{respondent_count}")
+
+            elif mechanic == Mechanic.SWIPE.value:
+                choice_counts: dict[str, int] = {}
+                for v in values:
+                    try:
+                        choice = json.loads(v)
+                        if isinstance(choice, str):
+                            choice_counts[choice] = choice_counts.get(choice, 0) + 1
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                if choice_counts:
+                    total = sum(choice_counts.values())
+                    for choice, count in sorted(choice_counts.items(), key=lambda x: -x[1]):
+                        stat_lines.append(f"  {choice}: {count}/{total}")
+
+            if stat_lines:
+                lines.append(f"\nQ: {q_text} [{mechanic}]")
+                lines.extend(stat_lines)
+
+        if not lines:
+            return ""
+
+        return "PRE-CALCULATED STATISTICS (use these directly):\n" + "\n".join(lines)
+
+    @staticmethod
     def _build_summary_prompt(answers_data: dict) -> str:
         answers = answers_data["answers"]
         participant_count = answers_data["participant_count"]
 
-        # Group answers by question for better summarization
-        answers_by_question = {}
+        participant_ids = sorted(set(a["participant_id"] for a in answers))
+        anon_map = {pid: f"Participant {i + 1}" for i, pid in enumerate(participant_ids)}
+
+        answers_by_question: dict[tuple, list] = {}
+        answers_by_q_text: dict[str, list] = {}
         for answer in answers:
-            q_text = answer["question_text"]
-            if q_text not in answers_by_question:
-                answers_by_question[q_text] = []
-            answers_by_question[q_text].append(answer)
+            key = (answer["question_text"], answer["question_mechanic"])
+            answers_by_question.setdefault(key, []).append(answer["value"])
+            answers_by_q_text.setdefault(answer["question_text"], []).append(answer)
 
-        prompt_parts = [
-            f"Group size: {participant_count} participants\n",
-            "QUESTION-BY-QUESTION ANSWERS:\n",
-        ]
+        prompt_parts = [f"Group size: {participant_count} participants\n"]
 
-        for q_text, q_answers in answers_by_question.items():
+        stats_block = AIService._compute_question_stats(answers_by_question)
+        if stats_block:
+            prompt_parts.append(stats_block)
+            prompt_parts.append("")
+
+        prompt_parts.append("QUESTION-BY-QUESTION ANSWERS:\n")
+        for q_text, q_answers in answers_by_q_text.items():
+            mechanic = q_answers[0]["question_mechanic"] if q_answers else ""
             prompt_parts.append(f"\nQ: {q_text}")
-            for answer in q_answers:
-                prompt_parts.append(
-                    f"  - {answer['participant_name']}: {answer['value']}"
-                )
+            if mechanic == Mechanic.TEXT.value:
+                for i, answer in enumerate(q_answers, start=1):
+                    prompt_parts.append(f"  [{i}] [ANSWER]: {sanitize(str(answer['value']), MAX_ANSWER_TEXT_LEN)}")
+            else:
+                for answer in q_answers:
+                    anon = anon_map.get(answer["participant_id"], "Participant ?")
+                    prompt_parts.append(f"  - [NAME]: {anon} | [ANSWER]: {sanitize(str(answer['value']), MAX_ANSWER_TEXT_LEN)}")
 
         prompt_parts.append(
             "\n\nProvide a structured summary that highlights the group's collective preferences, "
@@ -324,20 +425,27 @@ class AIService:
 
     @staticmethod
     def _build_result_prompt(answer_summary: str, answers_data: dict) -> str:
+        answers = answers_data["answers"]
+
+        participant_ids = sorted(set(a["participant_id"] for a in answers))
+        anon_map = {pid: f"Participant {i + 1}" for i, pid in enumerate(participant_ids)}
+
         prompt_parts = [
             "GROUP ANSWER SUMMARY:\n",
             answer_summary,
             "\n\nDETAILED ANSWER DATA:\n",
         ]
 
-        # Include structured answer data for precise reasoning
-        for answer in answers_data["answers"]:
-            prompt_parts.append(
-                f"- {answer['participant_name']} [{answer['question_mechanic']}]: {answer['value']}"
-            )
+        for answer in answers:
+            mechanic = answer["question_mechanic"]
+            if mechanic == Mechanic.TEXT.value:
+                prompt_parts.append(f"- [Anonymous] [TEXT]: {sanitize(str(answer['value']), MAX_ANSWER_TEXT_LEN)}")
+            else:
+                anon = anon_map.get(answer["participant_id"], "Participant ?")
+                prompt_parts.append(f"- [NAME]: {anon} | [TYPE]: {mechanic} | [ANSWER]: {sanitize(str(answer['value']), MAX_ANSWER_TEXT_LEN)}")
 
         prompt_parts.append(
-            f"\n\nBased on this group's preferences and constraints, generate {AI_MIN_QUESTIONS}–{AI_MAX_QUESTIONS} result recommendations. "
+            "\n\nBased on this group's preferences and constraints, generate 1 OVERALL result followed by 4–6 RECOMMENDATION results. "
             "Each recommendation should explicitly reference the group data that supports it."
         )
 
@@ -348,12 +456,27 @@ class AIService:
     # region Helpers
 
     @staticmethod
+    def _set_session_state(session_id: str, state: SessionState) -> None:
+        db = SessionLocal()
+        try:
+            session = db.query(Session).filter(Session.id == _uuid.UUID(session_id)).first()
+            if session:
+                session.state = state
+                db.commit()
+                logger.info("Session %s state reset to %s", session_id, state.value)
+        except Exception:
+            db.rollback()
+            logger.warning("Failed to reset session %s state to %s", session_id, state.value)
+        finally:
+            db.close()
+
+    @staticmethod
     def _build_user_prompt(
         topic: str, context: str | None,
     ) -> str:
-        parts = [f"Topic: {topic}"]
+        parts = [f"[TOPIC]: {sanitize(topic, MAX_TOPIC_LEN)}"]
         if context:
-            parts.append(f"Context: {context}")
+            parts.append(f"[CONTEXT]: {sanitize(context, MAX_CONTEXT_LEN)}")
         return "\n".join(parts)
 
     @staticmethod
@@ -368,11 +491,10 @@ class AIService:
                 last = q.options[-1].strip().lower().replace(" ", "")
                 if last != "other/any":
                     return False
-                
+
             if q.mechanic == Mechanic.SWIPE:
                 if not q.options or len(q.options) != 2:
                     return False
-                
 
         return True
 
