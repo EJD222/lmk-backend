@@ -8,6 +8,7 @@ from app.utils.sanitize import sanitize
 class QuestionOptionOut(BaseModel):
     id: str
     label: str
+    display_order: int
 
 
 class QuestionOut(BaseModel):
