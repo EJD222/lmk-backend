@@ -10,7 +10,7 @@ from app.models.answer import Answer
 from app.models.question import Question
 from app.schemas.participant import JoinSessionRequest, JoinSessionResponse
 from app.utils.http import HTTPStatusCode, HTTPErrorMessage
-from app.constants import SessionState
+from app.constants import MAX_PARTICIPANTS
 from app.services.pendo_service import pendo_track
 
 class ParticipantService:
@@ -43,6 +43,17 @@ class ParticipantService:
         )
         if existing:
             return JoinSessionResponse(participant_id=str(existing.id), session_id=str(session.id))
+
+        participant_count = (
+            db.query(Participant)
+            .filter(Participant.session_id == session.id)
+            .count()
+        )
+        if participant_count >= MAX_PARTICIPANTS:
+            raise HTTPException(
+                status_code=HTTPStatusCode.FORBIDDEN,
+                detail=HTTPErrorMessage.SESSION_FULL,
+            )
 
         participant = Participant(
             session_id=session.id,

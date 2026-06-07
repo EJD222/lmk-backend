@@ -23,3 +23,4 @@ class HTTPErrorMessage(str, Enum):
     QUESTIONS_GENERATION_FAILED = "Question generation failed. Please create a new session."
     PARTICIPANT_ALREADY_ANSWERED = "Participant has already submitted answers for this session."
     SESSION_CLOSED = "This session has already ended and is no longer accepting new participants."
+    SESSION_FULL = "This session has reached the maximum number of participants (7)."
