@@ -4,11 +4,12 @@ import uuid as _uuid
 from fastapi import HTTPException
 from sqlalchemy.orm import Session as DBSession
 
-from app.constants import RESULT_TYPE_ORDER
+from app.constants import RESULT_TYPE_ORDER, ResultType
+from app.models.participant import Participant
 from app.models.result import Result
 from app.models.session import Session
 from app.schemas.ai import AIResult
-from app.schemas.result import ResultOut, ResultsResponse
+from app.schemas.result import ResultOut, ResultsResponse, SessionMeta
 from app.utils.http import HTTPErrorMessage, HTTPStatusCode
 
 
@@ -61,13 +62,37 @@ class ResultService:
             except json.JSONDecodeError:
                 return raw
 
+        result_outs = [
+            ResultOut(
+                id=str(r.id),
+                type=r.type,
+                value=_parse(r.value),
+            )
+            for r in results
+        ]
+
+        top_pick = next(
+            (
+                r for r in result_outs
+                if r.type == ResultType.RECOMMENDATION
+                and isinstance(r.value, dict)
+                and r.value.get("ranking") == 1
+            ),
+            None,
+        )
+
+        participant_count = (
+            db.query(Participant)
+            .filter(Participant.session_id == session.id)
+            .count()
+        )
+
         return ResultsResponse(
-            results=[
-                ResultOut(
-                    id=str(r.id),
-                    type=r.type,
-                    value=_parse(r.value),
-                )
-                for r in results
-            ]
+            results=result_outs,
+            meta=SessionMeta(
+                topic=session.topic,
+                participant_count=participant_count,
+                created_at=session.created_at,
+                top_pick=top_pick,
+            ),
         )
