@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel
 from typing import Any
 
@@ -10,5 +12,12 @@ class ResultOut(BaseModel):
     value: Any
 
 
+class SessionMeta(BaseModel):
+    topic: str
+    participant_count: int
+    created_at: datetime
+    top_pick: ResultOut | None
+
 class ResultsResponse(BaseModel):
     results: list[ResultOut]
+    meta: SessionMeta
