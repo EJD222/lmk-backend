@@ -27,12 +27,6 @@ class ParticipantService:
                 detail=HTTPErrorMessage.SESSION_NOT_FOUND,
             )
 
-        if session.state == SessionState.RESULTS:
-            raise HTTPException(
-                status_code=HTTPStatusCode.FORBIDDEN,
-                detail=HTTPErrorMessage.SESSION_CLOSED,
-            )
-
         existing = (
             db.query(Participant)
             .filter(
