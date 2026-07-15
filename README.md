@@ -8,7 +8,21 @@ The API behind **lmk**, the group decision-making app. It runs sessions, collect
 everyone's answers, and uses AI to turn the group's input into a clear outcome —
 a top pick, where you agree, where you split, and a recommendation to act on.
 
-<sub>Built with FastAPI · SQLAlchemy · PostgreSQL · OpenAI · SSE</sub>
+<sub>Built with FastAPI · SQLAlchemy · Supabase (PostgreSQL) · OpenAI · SSE</sub>
+
+<br />
+
+[![Live Site](https://img.shields.io/badge/Live_Site-letmeknow.quest-2ea44f?style=for-the-badge)](https://www.letmeknow.quest)
+[![Devpost Submission](https://img.shields.io/badge/Devpost-Submission-blue?style=for-the-badge&logo=devpost&logoColor=white)](https://devpost.com/software/letmeknow-from-let-me-know-to-let-s-go)
+[![YouTube Demo](https://img.shields.io/badge/YouTube-Demo-red?style=for-the-badge&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=iX3x_TzALr8)
+
+🏆 **Winner** — *Product Bundle by Mind the Product* at [World Product Day: Everyone Ships Now](https://devpost.com/software/letmeknow-from-let-me-know-to-let-s-go) hackathon.
+
+---
+
+### 📺 Watch the Demo
+
+[![lmk Demo Video](https://img.youtube.com/vi/iX3x_TzALr8/hqdefault.jpg)](https://www.youtube.com/watch?v=iX3x_TzALr8)
 
 </div>
 
@@ -22,7 +36,7 @@ answers a few quick questions. The backend generates the questions, gathers the
 answers, and asks an LLM to distill them into results that are streamed back to
 every participant in real time.
 
-This repository is the **backend API**. The single-page React client lives in
+This repository is the **backend API**. The React frontend lives in
 [EJD222/lmk-frontend](https://github.com/EJD222/lmk-frontend).
 
 ## How it works
@@ -54,7 +68,7 @@ This repository is the **backend API**. The single-page React client lives in
 | Language        | Python 3.13                                                  |
 | ORM             | [SQLAlchemy 2](https://www.sqlalchemy.org/)                  |
 | Migrations      | [Alembic](https://alembic.sqlalchemy.org/)                   |
-| Database        | [PostgreSQL](https://www.postgresql.org/) (`psycopg2`)       |
+| Database        | [Supabase](https://supabase.com/) ([PostgreSQL](https://www.postgresql.org/)) (`psycopg2`) |
 | AI              | [OpenAI](https://platform.openai.com/) (`gpt-4o` by default) |
 | Validation      | [Pydantic v2](https://docs.pydantic.dev/)                    |
 | Realtime        | Server-Sent Events ([`sse-starlette`](https://github.com/sysid/sse-starlette)) |
